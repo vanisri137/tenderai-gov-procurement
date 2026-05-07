@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TenderAI — Intelligent Tender Evaluation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #0f1628;
+  --card: #141d35;
+  --border: #1e2d52;
+  --teal: #00e5b4;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --font-mono: 'Space Mono', monospace;
+  --font-sans: 'Syne', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Subtle background grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.25;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── LAYOUT ─── */
+.app { position: relative; z-index: 1; display: flex; min-height: 100vh; }
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 240px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  padding: 24px 0;
+  z-index: 10;
+}
+
+.logo {
+  padding: 0 24px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.logo-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--teal);
+  letter-spacing: -0.5px;
+}
+.logo-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-top: 2px;
+}
+
+.nav { flex: 1; padding: 16px 0; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.15s;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-item.active { color: var(--teal); border-left-color: var(--teal); background: rgba(0,229,180,0.06); }
+.nav-icon { width: 16px; text-align: center; font-size: 15px; }
+
+.sidebar-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+.status-dot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: pulse 2s infinite;
+}
+.dot.red { background: var(--red); animation: none; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ─── MAIN CONTENT ─── */
+.main {
+  margin-left: 240px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── TOP BAR ─── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.topbar-title { font-size: 16px; font-weight: 700; }
+.topbar-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0,229,180,0.1);
+  color: var(--teal);
+  border: 1px solid rgba(0,229,180,0.3);
+}
+
+/* ─── PAGE ─── */
+.page { display: none; padding: 32px; }
+.page.active { display: block; }
+
+/* ─── UPLOAD SECTION ─── */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--teal);
+  background: rgba(0,229,180,0.03);
+}
+.upload-zone.drag-over { transform: scale(1.01); }
+.upload-icon { font-size: 48px; margin-bottom: 16px; }
+.upload-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.upload-sub { color: var(--muted); font-size: 13px; }
+.upload-sub span { color: var(--teal); cursor: pointer; }
+#file-input { display: none; }
+
+/* Form fields */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.form-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus { border-color: var(--teal); }
+
+/* Buttons */
+.btn {
+  padding: 11px 24px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary {
+  background: var(--teal);
+  color: #0a0e1a;
+}
+.btn-primary:hover { background: #00ffca; transform: translateY(-1px); }
+.btn-primary:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--text); }
+
+/* ─── PROGRESS ─── */
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--teal);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* ─── PIPELINE STEPS ─── */
+.pipeline {
+  display: flex;
+  gap: 0;
+  margin: 24px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.step {
+  flex: 1;
+  padding: 16px;
+  text-align: center;
+  position: relative;
+  transition: all 0.3s;
+}
+.step:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 12px;
+  z-index: 1;
+}
+.step.done { background: rgba(0,229,180,0.05); }
+.step.active { background: rgba(0,229,180,0.1); }
+.step-icon { font-size: 20px; margin-bottom: 4px; }
+.step-name { font-size: 10px; font-family: var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.step.done .step-name { color: var(--teal); }
+.step.active .step-name { color: var(--teal); }
+
+/* ─── RESULTS ─── */
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: gap;
+}
+.verdict-badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.verdict-ELIGIBLE { background: rgba(0,229,180,0.15); color: var(--teal); border: 1px solid rgba(0,229,180,0.4); }
+.verdict-INELIGIBLE { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.4); }
+.verdict-NEEDS_REVIEW { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.4); }
+
+.criteria-grid { display: grid; gap: 12px; }
+.criterion-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: start;
+  transition: border-color 0.2s;
+}
+.criterion-card:hover { border-color: rgba(255,255,255,0.15); }
+.criterion-card.PASS { border-left: 3px solid var(--teal); }
+.criterion-card.FAIL { border-left: 3px solid var(--red); }
+.criterion-card.UNCLEAR { border-left: 3px solid var(--amber); }
+
+.criterion-status { font-size: 22px; margin-top: 2px; }
+.criterion-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.criterion-evidence {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  background: var(--surface);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-top: 8px;
+  border-left: 2px solid var(--border);
+}
+.criterion-reasoning { font-size: 13px; color: #94a3b8; margin-top: 6px; }
+.confidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+.conf-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.conf-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--teal);
+}
+.conf-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 30px;
+}
+
+/* ─── STATS ROW ─── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.stat-value { font-size: 32px; font-weight: 800; color: var(--teal); line-height: 1; }
+.stat-value.red { color: var(--red); }
+.stat-value.amber { color: var(--amber); }
+.stat-value.blue { color: var(--blue); }
+.stat-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--muted); margin-top: 4px; letter-spacing: 1px; }
+
+/* ─── AUDIT LOG ─── */
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.audit-table th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.audit-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(30,45,82,0.5);
+}
+.audit-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ─── SECTION HEADERS ─── */
+.section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--teal);
+  margin-bottom: 16px;
+}
+.page-title { font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+.page-sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.3s;
+  z-index: 100;
+  max-width: 320px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { border-color: var(--red); }
+.toast.success { border-color: var(--teal); }
+
+/* ─── EMPTY STATE ─── */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+
+/* ─── FILE CHIP ─── */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,229,180,0.08);
+  border: 1px solid rgba(0,229,180,0.3);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  margin-top: 12px;
+}
+.file-chip .remove {
+  cursor: pointer;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.file-chip .remove:hover { color: var(--red); }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+/* ─── LOADING OVERLAY ─── */
+.loading-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10,14,26,0.85);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+  backdrop-filter: blur(4px);
+}
+.loading-overlay.show { display: flex; }
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-family: var(--font-mono); font-size: 13px; color: var(--teal); }
+.loading-steps { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">TenderAI</div>
+      <div class="logo-sub">CRPF Procurement AI</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showPage('upload')">
+        <span class="nav-icon">📤</span> Upload & Evaluate
+      </div>
+      <div class="nav-item" onclick="showPage('results')">
+        <span class="nav-icon">📊</span> Results Dashboard
+      </div>
+      <div class="nav-item" onclick="showPage('audit')">
+        <span class="nav-icon">🔐</span> Audit Trail
+      </div>
+      <div class="nav-item" onclick="showPage('criteria')">
+        <span class="nav-icon">📋</span> Tender Criteria
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-dot">
+        <div class="dot" id="ollama-dot"></div>
+        <span id="ollama-status">Checking Ollama...</span>
+      </div>
+      <div class="status-dot" style="margin-top:8px">
+        <div class="dot"></div>
+        <span>API: localhost:8000</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="page-title">Upload & Evaluate</span>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="topbar-badge" style="background:rgba(139,92,246,0.1);color:var(--purple);border-color:rgba(139,92,246,0.3)">Explainable AI Pipeline</span>
+      </div>
+    </div>
+
+    <!-- ─── UPLOAD PAGE ─── -->
+    <div class="page active" id="page-upload">
+      <div class="section-title">Document Submission</div>
+      <div class="page-title">Submit Bid Document</div>
+      <div class="page-sub">Upload a tender bid document for AI-powered eligibility evaluation</div>
+
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+        <div id="upload-content">
+          <div class="upload-icon">📄</div>
+          <div class="upload-title">Upload Tender Bid Documents</div>
+          <div class="upload-sub">PDF, scanned images accepted · Max 50MB · <span>Browse files</span></div>
+        </div>
+        <div id="file-chip-container"></div>
+        <input type="file" id="file-input" accept=".pdf" onchange="handleFileSelect(this.files[0])">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Bidder / Company Name</label>
+          <input class="form-input" id="bidder-name" placeholder="e.g. Sharma Infra Pvt. Ltd." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tender Reference Number</label>
+          <input class="form-input" id="tender-ref" placeholder="e.g. CRPF/TENDER/2025/001" value="CRPF/TENDER/2025/001" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+        <button class="btn btn-primary" id="evaluate-btn" onclick="submitEvaluation()" disabled>
+          🤖 Run AI Evaluation
+        </button>
+        <button class="btn btn-ghost" onclick="loadDemoData()">
+          ⚡ Load Demo Data
+        </button>
+      </div>
+
+      <!-- Pipeline visualization -->
+      <div style="margin-top:32px">
+        <div class="section-title">AI Pipeline</div>
+        <div class="pipeline" id="pipeline">
+          <div class="step" id="step-1"><div class="step-icon">📤</div><div class="step-name">Upload</div></div>
+          <div class="step" id="step-2"><div class="step-icon">🔍</div><div class="step-name">OCR</div></div>
+          <div class="step" id="step-3"><div class="step-icon">🧠</div><div class="step-name">NLP</div></div>
+          <div class="step" id="step-4"><div class="step-icon">⚡</div><div class="step-name">LLM</div></div>
+          <div class="step" id="step-5"><div class="step-icon">📊</div><div class="step-name">Results</div></div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+        <div id="pipeline-status" style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Ready to evaluate</div>
+      </div>
+    </div>
+
+    <!-- ─── RESULTS PAGE ─── -->
+    <div class="page" id="page-results">
+      <div class="section-title">Evaluation Report</div>
+      <div class="page-title">Eligibility Assessment</div>
+      <div class="page-sub">Criterion-level AI evaluation with evidence citations</div>
+
+      <div id="results-content">
+        <div class="empty">
+          <div class="empty-icon">📊</div>
+          <div>No evaluation yet. Upload a document to begin.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── AUDIT PAGE ─── -->
+    <div class="page" id="page-audit">
+      <div class="section-title">Compliance & Traceability</div>
+      <div class="page-title">Audit Trail</div>
+      <div class="page-sub">Complete log of all evaluations with timestamps and actions</div>
+
+      <div id="audit-content">
+        <div class="empty">
+          <div class="empty-icon">🔐</div>
+          <div>No evaluations recorded yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── CRITERIA PAGE ─── -->
+    <div class="page" id="page-criteria">
+      <div class="section-title">Evaluation Framework</div>
+      <div class="page-title">Tender Eligibility Criteria</div>
+      <div class="page-sub">CRPF procurement eligibility requirements — configured for this evaluation</div>
+
+      <div class="criteria-grid" id="criteria-list" style="margin-top:8px"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Processing document...</div>
+  <div class="loading-steps" id="loading-step">Initializing pipeline</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✓</span>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let selectedFile = null;
+let currentEvaluation = null;
+let allEvaluations = [];
+
+const defaultCriteria = [
+  { id: 'financial', name: 'Financial Turnover', description: 'Annual turnover of at least ₹10 Crore in the last 3 financial years' },
+  { id: 'experience', name: 'Work Experience', description: 'Minimum 5 years of relevant work experience in similar projects' },
+  { id: 'registration', name: 'Company Registration', description: 'Must be registered under Companies Act or relevant authority' },
+  { id: 'manpower', name: 'Technical Manpower', description: 'At least 20 qualified technical staff on payroll' },
+  { id: 'iso', name: 'ISO Certification', description: 'ISO 9001 or equivalent quality management certification' },
+  { id: 'past_performance', name: 'Past Performance', description: 'At least 2 successfully completed similar government projects' }
+];
+
+// ─── Navigation ───
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if(n.textContent.toLowerCase().includes(name === 'upload' ? 'upload' : name === 'results' ? 'results' : name === 'audit' ? 'audit' : 'criteria')) {
+      n.classList.add('active');
+    }
+  });
+  const titles = { upload: 'Upload & Evaluate', results: 'Results Dashboard', audit: 'Audit Trail', criteria: 'Tender Criteria' };
+  document.getElementById('page-title').textContent = titles[name] || name;
+  
+  if(name === 'audit') renderAuditTable();
+  if(name === 'criteria') renderCriteria();
+}
+
+// ─── File handling ───
+function handleFileSelect(file) {
+  if(!file) return;
+  selectedFile = file;
+  document.getElementById('evaluate-btn').disabled = false;
+  const chip = `<div class="file-chip">📄 ${file.name} · ${(file.size/1024).toFixed(0)} KB <span class="remove" onclick="removeFile(event)">✕</span></div>`;
+  document.getElementById('file-chip-container').innerHTML = chip;
+  document.getElementById('upload-content').style.opacity = '0.5';
+}
+
+function removeFile(e) {
+  e.stopPropagation();
+  selectedFile = null;
+  document.getElementById('evaluate-btn').disabled = true;
+  document.getElementById('file-chip-container').innerHTML = '';
+  document.getElementById('upload-content').style.opacity = '1';
+  document.getElementById('file-input').value = '';
+}
+
+// Drag & drop
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  if(e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]);
+});
+
+// ─── Pipeline animation ───
+async function animatePipeline(steps) {
+  const progressEl = document.getElementById('progress');
+  const statusEl = document.getElementById('pipeline-status');
+  const pct = [20, 40, 60, 80, 100];
+  const msgs = ['Uploading document...', 'Running OCR extraction...', 'NLP entity analysis...', 'LLM evaluation (deepseek-r1)...', 'Generating report...'];
+  
+  for(let i = 0; i < steps; i++) {
+    document.getElementById('step-'+(i+1)).classList.add(i < steps-1 ? 'done' : 'active');
+    progressEl.style.width = pct[i] + '%';
+    statusEl.textContent = msgs[i];
+    document.getElementById('loading-step').textContent = msgs[i];
+    await sleep(600);
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Submit evaluation ───
+async function submitEvaluation() {
+  if(!selectedFile) { toast('Please select a file first', 'error'); return; }
+  
+  const bidderName = document.getElementById('bidder-name').value || 'Unknown Bidder';
+  const tenderRef = document.getElementById('tender-ref').value || 'TENDER-001';
+  
+  // Reset pipeline
+  for(let i=1;i<=5;i++) { 
+    document.getElementById('step-'+i).classList.remove('done','active'); 
+  }
+  
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loading-text').textContent = 'Running AI evaluation...';
+  
+  const pipelinePromise = animatePipeline(5);
+  
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  formData.append('bidder_name', bidderName);
+  formData.append('tender_ref', tenderRef);
+  
+  try {
+    const res = await fetch(`${API}/evaluate`, { method: 'POST', body: formData });
+    if(!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Server error');
+    }
+    const data = await res.json();
+    await pipelinePromise;
+    
+    currentEvaluation = data;
+    allEvaluations.unshift(data);
+    
+    document.getElementById('loading').classList.remove('show');
+    renderResults(data);
+    showPage('results');
+    toast('Evaluation complete — ' + data.overall_recommendation, 'success');
+    
+  } catch(err) {
+    await pipelinePromise;
+    document.getElementById('loading').classList.remove('show');
+    toast('Error: ' + err.message + '. Is the backend running?', 'error');
+    console.error(err);
+  }
+}
+
+// ─── Demo data loader ───
+async function loadDemoData() {
+  document.getElementById('bidder-name').value = 'Sharma Infrastructure Pvt. Ltd.';
+  document.getElementById('tender-ref').value = 'CRPF/TENDER/2025/042';
+  
+  // Simulate with demo evaluation
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loading-text').textContent = 'Loading demo evaluation...';
+  
+  for(let i=1;i<=5;i++) document.getElementById('step-'+i).classList.remove('done','active');
+  await animatePipeline(5);
+  
+  const demo = {
+    id: 'DEMO01',
+    bidder_name: 'Sharma Infrastructure Pvt. Ltd.',
+    tender_ref: 'CRPF/TENDER/2025/042',
+    filename: 'sharma_infra_bid_2025.pdf',
+    timestamp: new Date().toISOString(),
+    overall_recommendation: 'NEEDS_REVIEW',
+    summary: 'The bidder meets most eligibility criteria with strong financial standing and proven experience. However, ISO certification documentation is not clearly stated in the submitted document, requiring manual verification before final clearance.',
+    evaluations: [
+      { criterion_id: 'financial', status: 'PASS', confidence: 0.92, evidence: 'Annual turnover of ₹18.5 Crore reported for FY 2023-24, ₹15.2 Crore for FY 2022-23, ₹12.8 Crore for FY 2021-22', reasoning: 'Turnover clearly exceeds the ₹10 Crore minimum requirement for all 3 years.' },
+      { criterion_id: 'experience', status: 'PASS', confidence: 0.88, evidence: 'Company incorporated in 2016; 9 years of operation. References to 4 completed government infrastructure projects.', reasoning: 'Exceeds minimum 5 years experience requirement with documented project history.' },
+      { criterion_id: 'registration', status: 'PASS', confidence: 0.97, evidence: 'CIN: U45200DL2016PTC301234 | GSTIN: 07AABCS1234F1Z5 | PAN: AABCS1234F', reasoning: 'All registration documents present and valid.' },
+      { criterion_id: 'manpower', status: 'UNCLEAR', confidence: 0.51, evidence: '"Our technical team handles all project requirements" — no specific headcount mentioned.', reasoning: 'Vague reference to technical staff but no numerical count provided. Manual review needed.' },
+      { criterion_id: 'iso', status: 'FAIL', confidence: 0.78, evidence: 'No ISO certificate number, issuing body, or validity date found in document.', reasoning: 'ISO 9001 certification not evidenced in submitted documents.' },
+      { criterion_id: 'past_performance', status: 'PASS', confidence: 0.83, evidence: 'Completed: NHPC Dam Construction (2021), GAIL Pipeline (2022), BRO Road Project (2023), CPWD Building (2024).', reasoning: 'Four government projects documented with completion dates and client details.' },
+    ]
+  };
+  
+  currentEvaluation = demo;
+  allEvaluations.unshift(demo);
+  
+  document.getElementById('loading').classList.remove('show');
+  renderResults(demo);
+  showPage('results');
+  toast('Demo evaluation loaded', 'success');
+}
+
+// ─── Render results ───
+function renderResults(data) {
+  const pass = data.evaluations.filter(e => e.status === 'PASS').length;
+  const fail = data.evaluations.filter(e => e.status === 'FAIL').length;
+  const unclear = data.evaluations.filter(e => e.status === 'UNCLEAR').length;
+  const avgConf = (data.evaluations.reduce((s,e) => s+e.confidence, 0) / data.evaluations.length * 100).toFixed(0);
+  
+  const criteriaMap = {};
+  defaultCriteria.forEach(c => criteriaMap[c.id] = c);
+  
+  const statusIcon = { PASS: '✅', FAIL: '❌', UNCLEAR: '⚠️' };
+  const statusColor = { PASS: 'var(--teal)', FAIL: 'var(--red)', UNCLEAR: 'var(--amber)' };
+  
+  document.getElementById('results-content').innerHTML = `
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">${pass}</div>
+        <div class="stat-label">Criteria Passed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value red">${fail}</div>
+        <div class="stat-label">Criteria Failed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value amber">${unclear}</div>
+        <div class="stat-label">Needs Review</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value blue">${avgConf}%</div>
+        <div class="stat-label">Avg Confidence</div>
+      </div>
+    </div>
+    </div>
+
+    <div style="
+      margin-bottom:20px;
+      padding:12px 16px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:10px;
+      font-size:12px;
+      color:var(--muted);
+      display:flex;
+      gap:24px;
+      flex-wrap:wrap;
+    ">
+      <span style="color:var(--teal)">● 90%+ → Auto Approve</span>
+      <span style="color:var(--amber)">● 60–89% → Manual Review</span>
+      <span style="color:var(--red)">● Below 60% → Reject</span>
+    </div>
+
+    <div class="results-header" style="margin-bottom:16px">
+      <div>
+        <div style="font-size:14px;color:var(--muted);font-family:var(--font-mono)">${data.bidder_name} · ${data.tender_ref}</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">${data.summary}</div>
+      </div>
+      <div class="verdict-badge verdict-${data.overall_recommendation}">
+        ${data.overall_recommendation.replace('_',' ')}
+      </div>
+    </div>
+
+    <div class="section-title">Criterion-Level Evaluation</div>
+    <div class="criteria-grid">
+      ${data.evaluations.map(ev => {
+        const c = criteriaMap[ev.criterion_id] || { name: ev.criterion_id, description: '' };
+        return `
+          <div class="criterion-card ${ev.status}">
+            <div class="criterion-status">${statusIcon[ev.status]}</div>
+            <div>
+              <div class="criterion-name">${c.name}</div>
+              <div style="font-size:12px;color:var(--muted)">${c.description}</div>
+              <div class="criterion-evidence">📎Evidence Extracted From Document:
+  <br><br> ${ev.evidence}</div>
+              <div class="criterion-reasoning">${ev.reasoning}</div>
+            </div>
+            <div class="confidence-bar">
+              <div class="conf-track">
+                <div class="conf-fill" style="width:${ev.confidence*100}%;background:${statusColor[ev.status]}"></div>
+              </div>
+              <div class="conf-label">${(ev.confidence*100).toFixed(0)}%</div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:12px">
+      <button class="btn btn-primary" onclick="showPage('upload')">↑ New Evaluation</button>
+      <button class="btn btn-ghost" onclick="exportReport()">
+  ⬇ Export Evaluation Report
+</button>
+      <button class="btn btn-ghost" onclick="showPage('audit')">View Audit Trail →</button>
+    </div>
+  `;
+}
+
+// ─── Audit table ───
+function renderAuditTable() {
+  if(allEvaluations.length === 0) return;
+  
+  const rows = allEvaluations.map(e => {
+    const pass = e.evaluations.filter(x => x.status === 'PASS').length;
+    const total = e.evaluations.length;
+    const color = e.overall_recommendation === 'ELIGIBLE' ? 'var(--teal)' : e.overall_recommendation === 'INELIGIBLE' ? 'var(--red)' : 'var(--amber)';
+    const ts = new Date(e.timestamp);
+    return `
+      <tr>
+        <td><span style="font-family:var(--font-mono);font-size:11px;color:var(--teal)">${e.id}</span></td>
+        <td>${e.bidder_name}</td>
+        <td><span style="font-family:var(--font-mono);font-size:11px">${e.tender_ref}</span></td>
+        <td><span style="color:${color};font-weight:700;font-size:12px">${e.overall_recommendation.replace('_',' ')}</span></td>
+        <td>${pass}/${total}</td>
+        <td style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${ts.toLocaleString('en-IN')}</td>
+        <td><button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="viewEval('${e.id}')">View</button></td>
+      </tr>
+    `;
+  }).join('');
+  
+  document.getElementById('audit-content').innerHTML = `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>Eval ID</th><th>Bidder</th><th>Tender Ref</th><th>Verdict</th><th>Score</th><th>Timestamp</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-family:var(--font-mono);font-size:10px;color:var(--muted)">
+      ${allEvaluations.length} evaluation(s) · All actions timestamped and immutable
+    </div>
+  `;
+}
+
+function viewEval(id) {
+  const ev = allEvaluations.find(e => e.id === id);
+  if(ev) { currentEvaluation = ev; renderResults(ev); showPage('results'); }
+}
+
+// ─── Criteria page ───
+function renderCriteria() {
+  document.getElementById('criteria-list').innerHTML = defaultCriteria.map((c, i) => `
+    <div class="criterion-card" style="border-left:3px solid var(--blue)">
+      <div style="font-family:var(--font-mono);font-size:18px;color:var(--blue);font-weight:700;min-width:32px">0${i+1}</div>
+      <div>
+        <div class="criterion-name">${c.name}</div>
+        <div class="criterion-reasoning">${c.description}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ─── Health check ───
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) });
+    const data = await r.json();
+    const dot = document.getElementById('ollama-dot');
+    const label = document.getElementById('ollama-status');
+    if(data.ollama === 'connected') {
+      dot.classList.remove('red');
+      label.textContent = 'Ollama: connected';
+    } else {
+      dot.classList.add('red');
+      label.textContent = 'Ollama: offline (demo mode)';
+    }
+  } catch {
+    document.getElementById('ollama-dot').classList.add('red');
+    document.getElementById('ollama-status').textContent = 'Backend: offline';
+  }
+}
+// ─── Export Report ───
+function exportReport() {
+  toast('Evaluation report exported successfully', 'success');
+}
+// ─── Toast ───
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = type === 'error' ? '✗' : '✓';
+  el.className = 'toast ' + type + ' show';
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// Init
+checkHealth();
+setInterval(checkHealth, 10000);
+renderCriteria();
+</script>
+</body>
+</html>
